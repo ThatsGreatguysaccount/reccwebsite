@@ -188,7 +188,7 @@
         <div class="row">
           <div class="col-xl-12">
             <div class="counter-wrap-5">
-              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="200">
+              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="200" ref="counter1">
                 <div class="shape">
                   <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70" fill="none">
                     <circle cx="35" cy="35" r="35" fill="url(#paint0_linear_2801_4302)" />
@@ -201,11 +201,11 @@
                   </svg>
                 </div>
                 <h3>
-                  <span class="odometer" data-count="4507">00</span>+
+                  <span class="odometer">{{ counter1 }}</span>+
                 </h3>
                 <p>Successfull Cases</p>
               </div>
-              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="400">
+              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="400" ref="counter2">
                 <div class="shape">
                   <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70" fill="none">
                     <circle cx="35" cy="35" r="35" fill="url(#paint0_linear_2801_430212)" />
@@ -218,11 +218,11 @@
                   </svg>
                 </div>
                 <h3>
-                  <span class="odometer" data-count="78">00</span>Mil+
+                  <span class="odometer">{{ counter2 }}</span>Mil+
                 </h3>
                 <p>Totally Recovered</p>
               </div>
-              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="600">
+              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="600" ref="counter3">
                 <div class="shape">
                   <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70" fill="none">
                     <circle cx="35" cy="35" r="35" fill="url(#paint0_linear_2801_4302091)" />
@@ -235,11 +235,11 @@
                   </svg>
                 </div>
                 <h3>
-                  <span class="odometer" data-count="27">00</span>+
+                  <span class="odometer">{{ counter3 }}</span>+
                 </h3>
                 <p>Partner Organizations</p>
               </div>
-              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="800">
+              <div class="content" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="800" ref="counter4">
                 <div class="shape">
                   <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70" fill="none">
                     <circle cx="35" cy="35" r="35" fill="url(#paint0_linear_2801_432w302)" />
@@ -252,7 +252,7 @@
                   </svg>
                 </div>
                 <h3>
-                  <span class="odometer" data-count="98">00</span>+
+                  <span class="odometer">{{ counter4 }}</span>+
                 </h3>
                 <p>Success Rate</p>
               </div>
@@ -781,6 +781,9 @@ export default {
       settings
     }
   },
+  mounted() {
+    this.initCounters();
+  },
   data() {
     return {
       sidebarOpen: false,
@@ -790,6 +793,16 @@ export default {
         email: '',
         phone: '',
         question: ''
+      },
+      counter1: 0,
+      counter2: 0,
+      counter3: 0,
+      counter4: 0,
+      countersAnimated: {
+        counter1: false,
+        counter2: false,
+        counter3: false,
+        counter4: false
       }
     }
   },
@@ -806,6 +819,69 @@ export default {
         phone: '',
         question: ''
       };
+    },
+    initCounters() {
+      // Use Intersection Observer to detect when counters come into view
+      const observerOptions = {
+        threshold: 0.5,
+        rootMargin: '0px'
+      };
+
+      const counterConfigs = [
+        { ref: 'counter1', name: 'counter1', target: 4507 },
+        { ref: 'counter2', name: 'counter2', target: 78 },
+        { ref: 'counter3', name: 'counter3', target: 27 },
+        { ref: 'counter4', name: 'counter4', target: 98 }
+      ];
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const config = counterConfigs.find(c => entry.target === this.$refs[c.ref]);
+            if (config && !this.countersAnimated[config.name]) {
+              this.animateCounter(config.name, config.target);
+              this.countersAnimated[config.name] = true;
+            }
+          }
+        });
+      }, observerOptions);
+
+      // Observe all counter elements
+      this.$nextTick(() => {
+        counterConfigs.forEach(config => {
+          if (this.$refs[config.ref]) {
+            // Check if element is already visible (above the fold)
+            const rect = this.$refs[config.ref].getBoundingClientRect();
+            const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+            
+            if (isVisible && !this.countersAnimated[config.name]) {
+              // Element is already visible, animate immediately
+              this.animateCounter(config.name, config.target);
+              this.countersAnimated[config.name] = true;
+            } else {
+              // Observe for when it comes into view
+              observer.observe(this.$refs[config.ref]);
+            }
+          }
+        });
+      });
+    },
+    animateCounter(counterName, targetValue) {
+      const duration = 2000; // 2 seconds
+      const steps = 60;
+      const increment = targetValue / steps;
+      const stepDuration = duration / steps;
+      let current = 0;
+
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= targetValue) {
+          this[counterName] = targetValue;
+          clearInterval(timer);
+        } else {
+          this[counterName] = Math.floor(current);
+        }
+      }, stepDuration);
     }
   }
 }
