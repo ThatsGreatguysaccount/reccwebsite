@@ -52,6 +52,18 @@ class WithdrawalController extends ApiController
 
             // Calculate USD value using current crypto prices
             $amountUSD = $this->calculateAmountUSD($validated['asset'], $validated['amount']);
+            
+            // Validate that USD value was calculated successfully
+            if ($amountUSD <= 0 && $validated['amount'] > 0) {
+                \Log::error("Failed to calculate USD value for withdrawal. Asset: {$validated['asset']}, Amount: {$validated['amount']}");
+                
+                // Try one more time with a fresh API call
+                $amountUSD = $this->calculateAmountUSD($validated['asset'], $validated['amount']);
+                
+                if ($amountUSD <= 0) {
+                    return $this->error('Failed to calculate USD value for withdrawal. Please try again.', 500);
+                }
+            }
 
             // Create withdrawal request
             $withdrawalRequest = WithdrawalRequest::create([
@@ -171,9 +183,21 @@ class WithdrawalController extends ApiController
                 ->first();
             
             $fallbackPrice = 0;
-            if ($holding && $holding->balance > 0 && $holding->value_usd > 0) {
-                $fallbackPrice = (float) $holding->value_usd / (float) $holding->balance;
-                \Log::info("Using fallback price for {$asset}: {$fallbackPrice} from existing holding");
+            if ($holding && $holding->balance > 0) {
+                if ($holding->value_usd > 0) {
+                    $fallbackPrice = (float) $holding->value_usd / (float) $holding->balance;
+                    \Log::info("Using fallback price for {$asset}: {$fallbackPrice} from existing holding (value_usd: {$holding->value_usd}, balance: {$holding->balance})");
+                } else {
+                    // If value_usd is 0, try to update it first
+                    \Log::warning("Holding for {$asset} has value_usd = 0, attempting to fetch price to update it");
+                    $tempPrice = $this->getCurrentCryptoPrice($asset);
+                    if ($tempPrice > 0) {
+                        $holding->value_usd = (float) $holding->balance * $tempPrice;
+                        $holding->save();
+                        $fallbackPrice = $tempPrice;
+                        \Log::info("Updated holding value_usd and using price: {$fallbackPrice}");
+                    }
+                }
             }
 
             // If cache miss, fetch from API (this will also update the cache)
@@ -192,6 +216,22 @@ class WithdrawalController extends ApiController
                 if (isset($data[$coinId]['usd'])) {
                     $price = (float) $data[$coinId]['usd'];
                     \Log::info("Successfully fetched price for {$asset}: {$price}");
+                    
+                    // Update cache with the fetched price (update existing cache or create new)
+                    $cachedPrices = \Cache::get($cacheKey, []);
+                    if (!is_array($cachedPrices)) {
+                        $cachedPrices = [];
+                    }
+                    $cachedPrices[$asset] = $price;
+                    \Cache::put($cacheKey, $cachedPrices, 60); // Cache for 1 minute
+                    
+                    // Update holding's value_usd if available (for future fallback use)
+                    if ($holding && $holding->balance > 0) {
+                        $holding->value_usd = (float) $holding->balance * $price;
+                        $holding->save();
+                        \Log::info("Updated holding value_usd for {$asset} to {$holding->value_usd}");
+                    }
+                    
                     return $amount * $price;
                 } else {
                     \Log::warning("CoinGecko API: Price not found for {$asset} (ID: {$coinId}). Response: " . json_encode($data));
@@ -280,6 +320,15 @@ class WithdrawalController extends ApiController
                 if (isset($data[$coinId]['usd'])) {
                     $price = (float) $data[$coinId]['usd'];
                     \Log::info("Successfully fetched current price for {$asset}: {$price}");
+                    
+                    // Update cache with the fetched price (update existing cache or create new)
+                    $cachedPrices = \Cache::get($cacheKey, []);
+                    if (!is_array($cachedPrices)) {
+                        $cachedPrices = [];
+                    }
+                    $cachedPrices[$asset] = $price;
+                    \Cache::put($cacheKey, $cachedPrices, 60); // Cache for 1 minute
+                    
                     return $price;
                 } else {
                     \Log::warning("CoinGecko API: Price not found for {$asset} (ID: {$coinId}). Response: " . json_encode($data));
