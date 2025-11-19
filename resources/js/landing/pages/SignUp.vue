@@ -60,7 +60,7 @@
                     <div class="sign-up-form-wrapper">
                         <div class="row align-items-center justify-content-center">
                             <div class="col-xl-6 col-lg-6 mb-md-50 mb-xs-50" data-aos="fade-up" data-aos-duration="1000"
-                                data-aos-delay="200">
+                                data-aos-delay="200" style="opacity: 1; visibility: visible;">
                                 <form @submit.prevent="handleSignUp" class="sign-up-form">
                                     <div class="title">
                                         <h3>Create Your Account</h3>
@@ -144,6 +144,29 @@ export default {
       loading: false,
       error: null
     }
+  },
+  mounted() {
+    // Use nextTick to ensure DOM is fully rendered
+    this.$nextTick(() => {
+      // Initialize AOS on mount
+      if (window.AOS) {
+        window.AOS.init({
+          duration: 1000,
+          once: true,
+          offset: 0,
+          disable: false
+        });
+        // Refresh AOS to ensure elements are visible
+        window.AOS.refresh();
+      }
+      
+      // Force visibility as fallback
+      const formElement = this.$el.querySelector('.sign-up-form');
+      if (formElement) {
+        formElement.style.opacity = '1';
+        formElement.style.visibility = 'visible';
+      }
+    });
   },
   methods: {
     async handleSignUp() {
@@ -246,5 +269,22 @@ export default {
   min-height: 50% !important;
   padding-top: 75px !important;
   padding-bottom: 75px !important;
+}
+
+/* Ensure sign-up form is always visible */
+.sign-up-form-wrapper {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.sign-up-form {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Override AOS initial state */
+.sign-up-form-wrapper [data-aos] {
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 </style>
