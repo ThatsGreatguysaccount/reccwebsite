@@ -2,7 +2,8 @@ import axios from 'axios';
 window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-window.axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+// Use relative URLs in production, or VITE_API_URL if set
+window.axios.defaults.baseURL = import.meta.env.VITE_API_URL || '';
 
 // Add auth token to requests if available
 window.axios.interceptors.request.use(
