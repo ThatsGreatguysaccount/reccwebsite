@@ -87,9 +87,20 @@ export default {
         this.isCollapsed = true;
       }
     },
-    handleLogout() {
-      // TODO: Implement logout logic
-      this.$router.push('/sign-in');
+    async handleLogout() {
+      try {
+        // Call logout API to invalidate token on server
+        await window.axios.post('/api/v1/auth/logout');
+      } catch (error) {
+        // Even if API call fails, continue with client-side logout
+        console.error('Logout API call failed:', error);
+      } finally {
+        // Clear local storage
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        // Redirect to sign-in
+        this.$router.push('/sign-in');
+      }
     },
     handleMenuClick() {
       // Close sidebar on mobile when menu item is clicked
