@@ -24,6 +24,12 @@
           </router-link>
         </li>
         <li class="menu-item">
+          <router-link to="/admin/team-members" class="menu-link" :class="{ active: $route.path === '/admin/team-members' }" @click="handleMenuClick">
+            <i class="fa-solid fa-user-group"></i>
+            <span class="menu-text">Team Members</span>
+          </router-link>
+        </li>
+        <li class="menu-item">
           <router-link to="/admin/settings" class="menu-link" :class="{ active: $route.path === '/admin/settings' }" @click="handleMenuClick">
             <i class="fa-solid fa-cog"></i>
             <span class="menu-text">Website Settings</span>
@@ -114,7 +120,7 @@ export default {
   left: 0;
   top: 0;
   transition: width 0.3s ease, transform 0.3s ease;
-  z-index: 999;
+  z-index: 100;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -312,7 +318,7 @@ export default {
     top: 0;
     left: 0;
     height: 100vh;
-    z-index: 999;
+    z-index: 100;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   }
   

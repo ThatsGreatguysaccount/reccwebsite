@@ -215,15 +215,32 @@ class DashboardController extends ApiController
      */
     public function cryptoPrices(): JsonResponse
     {
+        $cacheKey = 'crypto_prices_detailed';
+        $cacheDuration = 60; // 1 minute cache to avoid rate limiting
+        
+        // Try to get from cache first
+        $cachedData = \Cache::get($cacheKey);
+        if ($cachedData !== null && is_array($cachedData)) {
+            \Log::info('Using cached detailed crypto prices');
+            return $this->success([
+                'prices' => $cachedData,
+            ], 'Crypto prices retrieved successfully (cached)');
+        }
+        
         try {
             // Using CoinGecko free API with more data
-            $response = Http::timeout(10)->get('https://api.coingecko.com/api/v3/simple/price', [
-                'ids' => 'bitcoin,ethereum,tron,tether',
-                'vs_currencies' => 'usd',
-                'include_market_cap' => 'true',
-                'include_24hr_change' => 'true',
-                'include_24hr_vol' => 'true',
-            ]);
+            $response = Http::timeout(15)
+                ->retry(3, 1000) // Retry 3 times with 1 second delay
+                ->withOptions([
+                    'verify' => true, // Always verify SSL certificates for security
+                ])
+                ->get('https://api.coingecko.com/api/v3/simple/price', [
+                    'ids' => 'bitcoin,ethereum,tron,tether',
+                    'vs_currencies' => 'usd',
+                    'include_market_cap' => 'true',
+                    'include_24hr_change' => 'true',
+                    'include_24hr_vol' => 'true',
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -262,6 +279,10 @@ class DashboardController extends ApiController
                     ],
                 ];
 
+                // Cache the prices for 1 minute
+                \Cache::put($cacheKey, $prices, $cacheDuration);
+                \Log::info('Cached detailed crypto prices for ' . $cacheDuration . ' seconds');
+
                 return $this->success([
                     'prices' => $prices,
                 ], 'Crypto prices retrieved successfully');
@@ -277,14 +298,30 @@ class DashboardController extends ApiController
 
     /**
      * Get crypto prices for calculations (simplified format)
+     * Uses cache to avoid rate limiting (1 minute cache)
      */
     private function getCryptoPrices(): array
     {
+        $cacheKey = 'crypto_prices_simple';
+        $cacheDuration = 60; // 1 minute cache to avoid rate limiting
+        
+        // Try to get from cache first
+        $cachedPrices = \Cache::get($cacheKey);
+        if ($cachedPrices !== null && is_array($cachedPrices)) {
+            \Log::info('Using cached crypto prices');
+            return $cachedPrices;
+        }
+        
         try {
-            $response = Http::timeout(10)->get('https://api.coingecko.com/api/v3/simple/price', [
-                'ids' => 'bitcoin,ethereum,tron,tether',
-                'vs_currencies' => 'usd',
-            ]);
+            $response = Http::timeout(15)
+                ->retry(3, 1000) // Retry 3 times with 1 second delay
+                ->withOptions([
+                    'verify' => true, // Always verify SSL certificates for security
+                ])
+                ->get('https://api.coingecko.com/api/v3/simple/price', [
+                    'ids' => 'bitcoin,ethereum,tron,tether',
+                    'vs_currencies' => 'usd',
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -311,6 +348,10 @@ class DashboardController extends ApiController
                         \Log::warning("Crypto price for {$symbol} is 0 from CoinGecko API. Data: " . json_encode($data[$this->getCoinGeckoId($symbol)] ?? 'not found'));
                     }
                 }
+                
+                // Cache the prices for 1 minute
+                \Cache::put($cacheKey, $prices, $cacheDuration);
+                \Log::info('Cached crypto prices for ' . $cacheDuration . ' seconds');
                 
                 return $prices;
             } else {

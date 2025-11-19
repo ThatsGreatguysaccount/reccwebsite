@@ -70,81 +70,33 @@
             </div>
         </div>
         <div class="row">
-            <div class="col-xl-4 col-lg-4 col-md-6" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="200">
-                <div class="team-wrap mb-30">
-                    <div class="thumb">
-                        <img src="/landing/img/team/hans-(Compressify.io).png" alt="team">
-                    </div>
-                    <div class="content">
-                        <div class="author">
-                            <h4 class="designation">
-                                Hans Peter Smith
-                            </h4>
-                            <p class="designation">Head of the Financial Department</p>
-                        </div>
-                        <div class="social-wrap">
-                            <ul>
-                                <li><a href="mailto:Hans.Peter.Smith@blockchain-guard.us"><i class="fa-regular fa-envelope"></i></a></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+            <div v-if="loading" class="col-12 text-center team-loading">
+                <div class="loading-spinner"></div>
+                <p>Loading team members...</p>
             </div>
-            <div class="col-xl-4 col-lg-4 col-md-6" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="200">
-                <div class="team-wrap mb-30">
-                    <div class="thumb">
-                        <img src="/landing/img/team/emily-(Compressify.io).png" alt="team">
-                    </div>
-                    <div class="content">
-                        <div class="author">
-                            <h4 class="designation">
-                                Emily Ann Rich
-                            </h4>
-                            <p class="designation">Financial Department</p>
-                        </div>
-                        <div class="social-wrap">
-                            <ul>
-                                <li><a href="mailto:Emily.Ann.Rich@blockchain-guard.us"><i class="fa-regular fa-envelope"></i></a></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+            <div v-else-if="teamMembers.length === 0" class="col-12 text-center team-empty">
+                <i class="fa-solid fa-user-group"></i>
+                <p>No team members available at the moment.</p>
             </div>
-            <div class="col-xl-4 col-lg-4 col-md-6" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="200">
+            <div v-else v-for="(member, index) in teamMembers" :key="member.id" 
+                 class="col-xl-4 col-lg-4 col-md-6" 
+                 :data-aos="'fade-up'" 
+                 :data-aos-duration="1000" 
+                 :data-aos-delay="200 + (index * 100)">
                 <div class="team-wrap mb-30">
                     <div class="thumb">
-                        <img src="/landing/img/team/sean-(Compressify.io).png" alt="team">
+                        <img :src="member.photo || '/customer/images/user.png'" :alt="member.name" @error="handleImageError">
                     </div>
                     <div class="content">
                         <div class="author">
-                            <h4 class="designation">
-                                Sean Kruger
+                            <h4 class="name">
+                                {{ member.name }}
                             </h4>
-                            <p class="designation">Financial Department</p>
+                            <p class="designation">{{ member.designation }}</p>
                         </div>
-                        <div class="social-wrap">
+                        <div v-if="member.email" class="social-wrap">
                             <ul>
-                                <li><a href="mailto:Sean.Kruger@blockchain-guard.us"><i class="fa-regular fa-envelope"></i></a></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xl-4 col-lg-4 col-md-6" data-aos="fade-up" data-aos-duration="1000" data-aos-delay="200">
-                <div class="team-wrap mb-30">
-                    <div class="thumb">
-                        <img src="/landing/img/team/michael-(Compressify.io).png" alt="team">
-                    </div>
-                    <div class="content">
-                        <div class="author">
-                            <h4 class="designation">
-                               <span>Michael George Richard</span>
-                            </h4>
-                            <p class="designation">CEO</p>
-                        </div>
-                        <div class="social-wrap">
-                            <ul>
-                                <li><a href="mailto:Michael.George.Richard@blockchain-guard.us"><i class="fa-regular fa-envelope"></i></a></li>
+                                <li><a :href="`mailto:${member.email}`" :title="`Email ${member.name}`"><i class="fa-regular fa-envelope"></i></a></li>
                             </ul>
                         </div>
                     </div>
@@ -178,12 +130,34 @@ export default {
   },
   data() {
     return {
-      sidebarOpen: false
+      sidebarOpen: false,
+      teamMembers: [],
+      loading: true
     }
   },
-  mounted() {
+  async mounted() {
     if (window.AOS) {
       window.AOS.init();
+    }
+    await this.fetchTeamMembers();
+  },
+  methods: {
+    async fetchTeamMembers() {
+      try {
+        const response = await window.axios.get('/api/v1/public/team-members');
+        if (response.data.success) {
+          this.teamMembers = response.data.data.team_members || [];
+        }
+      } catch (error) {
+        console.error('Failed to fetch team members:', error);
+        this.teamMembers = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+    handleImageError(event) {
+      // Fallback to default user image if photo fails to load
+      event.target.src = '/customer/images/user.png';
     }
   }
 }
@@ -195,5 +169,114 @@ export default {
   min-height: 50% !important;
   padding-top: 75px !important;
   padding-bottom: 75px !important;
+}
+
+.team-loading,
+.team-empty {
+  padding: 60px 20px;
+}
+
+.team-loading {
+  color: #6b7280;
+}
+
+.team-empty {
+  color: #6b7280;
+}
+
+.team-empty i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+  display: block;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+.team-wrap {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.team-wrap .thumb {
+  position: relative;
+  width: 100%;
+  height: 450px;
+  overflow: hidden;
+}
+
+.team-wrap .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.3s ease;
+}
+
+.team-wrap:hover .thumb img {
+  transform: scale(1.05);
+}
+
+.team-wrap .content .author .name {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #ffffff;
+}
+
+.team-wrap .content .author .designation {
+  font-size: 14px;
+  color: #ffffff;
+  margin-bottom: 12px;
+}
+
+.team-wrap .content .social-wrap ul li a {
+  transition: all 0.3s ease;
+}
+
+.team-wrap .content .social-wrap ul li a:hover {
+  transform: translateY(-2px);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 991px) {
+  .team-wrap .thumb {
+    height: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .team-loading,
+  .team-empty {
+    padding: 40px 15px;
+  }
+  
+  .team-empty i {
+    font-size: 36px;
+  }
+  
+  .team-wrap .thumb {
+    height: 350px;
+  }
+}
+
+@media (max-width: 576px) {
+  .team-wrap .thumb {
+    height: 300px;
+  }
 }
 </style>

@@ -42,6 +42,7 @@ import CustomerContact from '../customer/pages/Contact.vue';
 // Admin Pages
 import AdminAccounts from '../admin/pages/Accounts.vue';
 import AdminTransactions from '../admin/pages/Transactions.vue';
+import AdminTeamMembers from '../admin/pages/TeamMembers.vue';
 import AdminSettings from '../admin/pages/Settings.vue';
 
 // Old pages (keeping for reference)
@@ -220,6 +221,12 @@ const routes = [
     path: '/admin/transactions',
     name: 'AdminTransactions',
     component: AdminTransactions,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/team-members',
+    name: 'AdminTeamMembers',
+    component: AdminTeamMembers,
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {

@@ -118,7 +118,7 @@ export default {
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 101;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
@@ -276,7 +276,7 @@ export default {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-width: 180px;
   padding: 8px;
-  z-index: 1000;
+  z-index: 101;
 }
 
 [data-mode="dark"] .user-menu {
@@ -332,7 +332,7 @@ export default {
   .customer-header {
     position: sticky;
     top: 0;
-    z-index: 1000;
+    z-index: 101;
   }
   
   .header-nav {

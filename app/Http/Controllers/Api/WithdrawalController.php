@@ -139,6 +139,7 @@ class WithdrawalController extends ApiController
 
     /**
      * Calculate USD value for crypto amount
+     * Uses cached prices to avoid rate limiting
      */
     private function calculateAmountUSD(string $asset, float $amount): float
     {
@@ -155,31 +156,79 @@ class WithdrawalController extends ApiController
                 return $amount; // For fiat, return as is
             }
 
-            $response = Http::timeout(10)->get('https://api.coingecko.com/api/v3/simple/price', [
-                'ids' => $coinId,
-                'vs_currencies' => 'usd',
-            ]);
+            // Try to get price from cache first (shared cache from getCryptoPrices)
+            $cacheKey = 'crypto_prices_simple';
+            $cachedPrices = \Cache::get($cacheKey);
+            if ($cachedPrices !== null && is_array($cachedPrices) && isset($cachedPrices[$asset]) && $cachedPrices[$asset] > 0) {
+                $price = (float) $cachedPrices[$asset];
+                \Log::info("Using cached price for {$asset}: {$price}");
+                return $amount * $price;
+            }
+
+            // Try to get price from existing holding (fallback)
+            $holding = CryptoHolding::where('user_id', request()->user()->id)
+                ->where('symbol', $asset)
+                ->first();
+            
+            $fallbackPrice = 0;
+            if ($holding && $holding->balance > 0 && $holding->value_usd > 0) {
+                $fallbackPrice = (float) $holding->value_usd / (float) $holding->balance;
+                \Log::info("Using fallback price for {$asset}: {$fallbackPrice} from existing holding");
+            }
+
+            // If cache miss, fetch from API (this will also update the cache)
+            $response = Http::timeout(15)
+                ->retry(3, 1000) // Retry 3 times with 1 second delay
+                ->withOptions([
+                    'verify' => true, // Always verify SSL certificates for security
+                ])
+                ->get('https://api.coingecko.com/api/v3/simple/price', [
+                    'ids' => $coinId,
+                    'vs_currencies' => 'usd',
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
                 if (isset($data[$coinId]['usd'])) {
                     $price = (float) $data[$coinId]['usd'];
+                    \Log::info("Successfully fetched price for {$asset}: {$price}");
                     return $amount * $price;
                 } else {
                     \Log::warning("CoinGecko API: Price not found for {$asset} (ID: {$coinId}). Response: " . json_encode($data));
+                    if ($fallbackPrice > 0) {
+                        \Log::info("Using fallback price for {$asset}: {$fallbackPrice}");
+                        return $amount * $fallbackPrice;
+                    }
                 }
             } else {
-                \Log::warning("CoinGecko API failed for {$asset}. Status: " . $response->status());
+                \Log::warning("CoinGecko API failed for {$asset}. Status: " . $response->status() . ", Body: " . $response->body());
+                if ($fallbackPrice > 0) {
+                    \Log::info("Using fallback price for {$asset} due to API failure: {$fallbackPrice}");
+                    return $amount * $fallbackPrice;
+                }
             }
         } catch (\Exception $e) {
-            \Log::error("Failed to calculate USD for {$asset}: " . $e->getMessage());
+            \Log::error("Failed to calculate USD for {$asset}: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+            
+            // Try fallback price
+            $holding = CryptoHolding::where('user_id', request()->user()->id)
+                ->where('symbol', $asset)
+                ->first();
+            
+            if ($holding && $holding->balance > 0 && $holding->value_usd > 0) {
+                $fallbackPrice = (float) $holding->value_usd / (float) $holding->balance;
+                \Log::info("Using fallback price for {$asset} after exception: {$fallbackPrice}");
+                return $amount * $fallbackPrice;
+            }
         }
 
+        \Log::error("Failed to calculate USD for {$asset}: No price available and no fallback");
         return 0;
     }
 
     /**
      * Get current crypto price from CoinGecko
+     * Uses cached prices to avoid rate limiting
      */
     private function getCurrentCryptoPrice(string $asset): float
     {
@@ -196,34 +245,126 @@ class WithdrawalController extends ApiController
                 return 0;
             }
 
-            $response = Http::timeout(10)->get('https://api.coingecko.com/api/v3/simple/price', [
-                'ids' => $coinId,
-                'vs_currencies' => 'usd',
-            ]);
+            // Try to get price from cache first (shared cache from getCryptoPrices)
+            $cacheKey = 'crypto_prices_simple';
+            $cachedPrices = \Cache::get($cacheKey);
+            if ($cachedPrices !== null && is_array($cachedPrices) && isset($cachedPrices[$asset]) && $cachedPrices[$asset] > 0) {
+                $price = (float) $cachedPrices[$asset];
+                \Log::info("Using cached price for {$asset}: {$price}");
+                return $price;
+            }
+
+            // Try to get price from existing holding (fallback)
+            $holding = CryptoHolding::where('user_id', request()->user()->id)
+                ->where('symbol', $asset)
+                ->first();
+            
+            $fallbackPrice = 0;
+            if ($holding && $holding->balance > 0 && $holding->value_usd > 0) {
+                $fallbackPrice = (float) $holding->value_usd / (float) $holding->balance;
+            }
+
+            // If cache miss, fetch from API (this will also update the cache)
+            $response = Http::timeout(15)
+                ->retry(3, 1000) // Retry 3 times with 1 second delay
+                ->withOptions([
+                    'verify' => true, // Always verify SSL certificates for security
+                ])
+                ->get('https://api.coingecko.com/api/v3/simple/price', [
+                    'ids' => $coinId,
+                    'vs_currencies' => 'usd',
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
                 if (isset($data[$coinId]['usd'])) {
-                    return (float) $data[$coinId]['usd'];
+                    $price = (float) $data[$coinId]['usd'];
+                    \Log::info("Successfully fetched current price for {$asset}: {$price}");
+                    return $price;
+                } else {
+                    \Log::warning("CoinGecko API: Price not found for {$asset} (ID: {$coinId}). Response: " . json_encode($data));
+                    if ($fallbackPrice > 0) {
+                        \Log::info("Using fallback price for {$asset}: {$fallbackPrice}");
+                        return $fallbackPrice;
+                    }
+                }
+            } else {
+                \Log::warning("CoinGecko API failed for {$asset}. Status: " . $response->status() . ", Body: " . $response->body());
+                if ($fallbackPrice > 0) {
+                    \Log::info("Using fallback price for {$asset} due to API failure: {$fallbackPrice}");
+                    return $fallbackPrice;
                 }
             }
         } catch (\Exception $e) {
-            \Log::error("Failed to fetch price for {$asset}: " . $e->getMessage());
+            \Log::error("Failed to fetch price for {$asset}: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+            
+            // Try fallback price
+            $holding = CryptoHolding::where('user_id', request()->user()->id)
+                ->where('symbol', $asset)
+                ->first();
+            
+            if ($holding && $holding->balance > 0 && $holding->value_usd > 0) {
+                $fallbackPrice = (float) $holding->value_usd / (float) $holding->balance;
+                \Log::info("Using fallback price for {$asset} after exception: {$fallbackPrice}");
+                return $fallbackPrice;
+            }
         }
 
+        \Log::error("Failed to fetch price for {$asset}: No price available and no fallback");
         return 0;
     }
 
     /**
      * Update allocation percentages for all user holdings
+     * Uses cached prices to avoid rate limiting
      */
     private function updateAllocationPercentages(int $userId): void
     {
         // Get all crypto holdings with current prices
         $cryptoHoldings = CryptoHolding::where('user_id', $userId)->get();
         $cryptoPrices = [];
-        foreach (['BTC', 'ETH', 'TRX', 'USDT'] as $symbol) {
-            $cryptoPrices[$symbol] = $this->getCurrentCryptoPrice($symbol);
+        
+        // Try to get prices from cache first
+        $cacheKey = 'crypto_prices_simple';
+        $cachedPrices = \Cache::get($cacheKey);
+        if ($cachedPrices !== null && is_array($cachedPrices)) {
+            $cryptoPrices = $cachedPrices;
+            \Log::info('Using cached prices for allocation update');
+        } else {
+            // If cache miss, fetch from API (this will also update the cache)
+            try {
+                $response = Http::timeout(15)
+                    ->retry(3, 1000)
+                    ->withOptions([
+                        'verify' => true, // Always verify SSL certificates for security
+                    ])
+                    ->get('https://api.coingecko.com/api/v3/simple/price', [
+                        'ids' => 'bitcoin,ethereum,tron,tether',
+                        'vs_currencies' => 'usd',
+                    ]);
+                
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $cryptoPrices = [
+                        'BTC' => isset($data['bitcoin']['usd']) ? (float) $data['bitcoin']['usd'] : 0,
+                        'ETH' => isset($data['ethereum']['usd']) ? (float) $data['ethereum']['usd'] : 0,
+                        'TRX' => isset($data['tron']['usd']) ? (float) $data['tron']['usd'] : 0,
+                        'USDT' => isset($data['tether']['usd']) ? (float) $data['tether']['usd'] : 0,
+                    ];
+                    
+                    // Cache the prices for 1 minute
+                    \Cache::put($cacheKey, $cryptoPrices, 60);
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to fetch bulk crypto prices: " . $e->getMessage());
+            }
+            
+            // Fallback to individual price fetching if bulk failed
+            foreach (['BTC', 'ETH', 'TRX', 'USDT'] as $symbol) {
+                if (!isset($cryptoPrices[$symbol]) || $cryptoPrices[$symbol] == 0) {
+                    $cryptoPrices[$symbol] = $this->getCurrentCryptoPrice($symbol);
+                }
+            }
         }
         
         $totalCryptoUSD = 0;

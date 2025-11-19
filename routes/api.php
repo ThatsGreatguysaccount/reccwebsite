@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AccountsController as AdminAccountsController;
 use App\Http\Controllers\Api\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Api\Admin\TransactionsController as AdminTransactionsController;
+use App\Http\Controllers\Api\Admin\TeamMembersController as AdminTeamMembersController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
@@ -18,6 +19,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::get('/public/settings', [\App\Http\Controllers\Api\PublicSettingsController::class, 'index']);
+    Route::get('/public/team-members', [\App\Http\Controllers\Api\PublicTeamMembersController::class, 'index']);
     
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -68,6 +70,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/settings', [AdminSettingsController::class, 'update']);
             Route::post('/settings/smtp', [AdminSettingsController::class, 'updateSMTP']);
             Route::post('/settings/upload-logo', [AdminSettingsController::class, 'uploadLogo']);
+            
+            // Team Members
+            Route::get('/team-members', [AdminTeamMembersController::class, 'index']);
+            Route::post('/team-members', [AdminTeamMembersController::class, 'store']);
+            Route::put('/team-members/{id}', [AdminTeamMembersController::class, 'update']);
+            Route::delete('/team-members/{id}', [AdminTeamMembersController::class, 'destroy']);
         });
     });
 });
